@@ -4,8 +4,8 @@ import FFT
 import struct
 import Encryption
 import png
-
-
+import zlib,os
+from pathlib import Path
 class PNG_decoder:
 
     def __init__(self,file,cv_image):
@@ -15,13 +15,13 @@ class PNG_decoder:
 
     def read_chunks(self):
         while True:
-            chunk_type, chunk_data, chunk_crc = Chunks.read_chunk(self.image)
-            self.chunk_list.append((chunk_type, chunk_data, chunk_crc))
+            chunk_type, chunk_data, chunk_crc, chunk_length = Chunks.read_chunk(self.image)
+            self.chunk_list.append((chunk_type, chunk_data, chunk_crc,chunk_length))
             if chunk_type == b'IEND':
                 break
 
     def print_chunks_list(self):
-        print("CHUNKS TYPE: ", [chunk_type for chunk_type, chunk_data, chunk_crc in self.chunk_list])
+        print("CHUNKS TYPE: ", [chunk_type for chunk_type, chunk_data, chunk_crc,chunk_length in self.chunk_list])
 
     def fourier_transform(self):
         image = FFT.Fourier(self.cv_image)
@@ -32,19 +32,19 @@ class PNG_decoder:
         cv2.waitKey(0)
 
     def IHDR_chunk(self):
-        for chunk_type, chunk_data, chunk_crc in self.chunk_list:
+        for chunk_type, chunk_data, chunk_crc,chunk_length in self.chunk_list:
             if chunk_type == b'IHDR':
-                data = Chunks.IHDR(chunk_type,chunk_data,chunk_crc)
+                data = Chunks.IHDR(chunk_type,chunk_data,chunk_crc, chunk_length)
                 data.print_chunk()
                 break
             elif chunk_type == b'IEND':
                 print("File does not contain IHDR chunk")
 
     def PLTE_chunk(self):
-        for chunk_type, chunk_data, chunk_crc in self.chunk_list:
+        for chunk_type, chunk_data, chunk_crc,chunk_length in self.chunk_list:
             if chunk_type == b'IHDR':
-                check = Chunks.IHDR(chunk_type,chunk_data,chunk_crc)
-        for chunk_type, chunk_data, chunk_crc in self.chunk_list:
+                check = Chunks.IHDR(chunk_type,chunk_data,chunk_crc, chunk_length)
+        for chunk_type, chunk_data, chunk_crc, chunk_length in self.chunk_list:
             if chunk_type == b'PLTE':
                 data = Chunks.PLTE(chunk_type,chunk_data,chunk_crc)
                 data.check_chunk(check.color_type)
@@ -53,45 +53,45 @@ class PNG_decoder:
                 print("File does not contain PLTE chunk")
 
     def IDAT_chunk(self):
-        for chunk_type, chunk_data, chunk_crc in self.chunk_list:
+        for chunk_type, chunk_data, chunk_crc,chunk_length in self.chunk_list:
             if chunk_type == b'IHDR':
-                check = Chunks.IHDR(chunk_type,chunk_data,chunk_crc)
-        idat_data = b''.join(chunk_data for chunk_type, chunk_data, chunk_crc in self.chunk_list if chunk_type == b'IDAT')
-        data = Chunks.IDAT(chunk_type,idat_data,chunk_crc,check.width,check.height,check.color_type)
+                check = Chunks.IHDR(chunk_type,chunk_data,chunk_crc, chunk_length)
+        idat_data = b''.join(chunk_data for chunk_type, chunk_data, chunk_crc,chunk_length in self.chunk_list if chunk_type == b'IDAT')
+        data = Chunks.IDAT(chunk_type,idat_data,chunk_crc,check.width,check.height,check.color_type, chunk_length)
         if data:
             data.plot_image()
         else:
             raise Exception("IDAT error")
 
     def IEND_chunk(self):
-        for chunk_type, chunk_data, chunk_crc in self.chunk_list:
+        for chunk_type, chunk_data, chunk_crc,chunk_length in self.chunk_list:
             if chunk_type == b'IEND':
-                data = Chunks.IEND(chunk_type,chunk_data,chunk_crc)
+                data = Chunks.IEND(chunk_type,chunk_data,chunk_crc, chunk_length)
                 data.print_chunk()
 
 
     def tIME_chunk(self):
-        for chunk_type, chunk_data, chunk_crc in self.chunk_list:
+        for chunk_type, chunk_data, chunk_crc,chunk_length in self.chunk_list:
             if chunk_type == b'tIME':
-                data = Chunks.tIME(chunk_type,chunk_data,chunk_crc)
+                data = Chunks.tIME(chunk_type,chunk_data,chunk_crc, chunk_length)
                 data.print_chunk()
             elif chunk_type == b'IEND':
                 print("File does not contain tIME chunk")
 
 
     def gAMA_chunk(self):
-        for chunk_type, chunk_data, chunk_crc in self.chunk_list:
+        for chunk_type, chunk_data, chunk_crc,chunk_length in self.chunk_list:
             if chunk_type == b'gAMA':
-                data = Chunks.gAMA(chunk_type,chunk_data,chunk_crc)
+                data = Chunks.gAMA(chunk_type,chunk_data,chunk_crc, chunk_length)
                 data.print_chunk()
                 break
             elif chunk_type == b'IEND':
                 print("File does not contain gAMA chunk")
 
     def cHRM_chunk(self):
-        for chunk_type, chunk_data, chunk_crc in self.chunk_list:
+        for chunk_type, chunk_data, chunk_crc,chunk_length in self.chunk_list:
             if chunk_type == b'cHRM':
-                data = Chunks.cHRM(chunk_type,chunk_data,chunk_crc)
+                data = Chunks.cHRM(chunk_type,chunk_data,chunk_crc, chunk_length)
                 data.print_chunk()
                 break
             elif chunk_type == b'IEND':
@@ -120,46 +120,57 @@ class PNG_decoder:
         new_file.close()
         print("New png file without ancillary chunks created. File_name: " + new_file_name + "\n")
 
-    def png_writer(self):
-        for chunk_type, chunk_data, chunk_crc in self.chunk_list:
-            if chunk_type == b'IHDR':
-                check = Chunks.IHDR(chunk_type,chunk_data,chunk_crc)
-        idat_data = b''.join(chunk_data for chunk_type, chunk_data, chunk_crc in self.chunk_list if chunk_type == b'IDAT')
-        data = Chunks.IDAT(chunk_type, idat_data, chunk_crc, check.width, check.height, check.color_type)
-        print(data.bytes_per_pixel)
-        if data.bytes_per_pixel == 1:
-            png_writer = png.Writer(data.width, data.height, greyscale=True)
-        elif data.bytes_per_pixel == 2:
-            png_writer = png.Writer(data.width, data.height, greyscale=True, alpha=True)
-        elif data.bytes_per_pixel == 3:
-            png_writer = png.Writer(data.width, data.height, greyscale=False)
-        elif data.bytes_per_pixel == 4:
-            png_writer = png.Writer(data.width, data.height, greyscale=False, alpha=True)
-        return png_writer,data.width, data.height, data.bytes_per_pixel
 
-    def save_image_with_png_writer(self, data, name):
-        png_writer, width, height, bytes_per_pixel = self.png_writer()
-        print(bytes_per_pixel)
-        bytes_row_width = width * bytes_per_pixel
-        pixels_grouped_by_rows = [data[i: i + bytes_row_width] for i in range(0, len(data), bytes_row_width)]
+    def save_file(self,file,data):
+        img_path = "./images/{}".format(file)
+        if Path(img_path).is_file():
+            os.remove(img_path)
+        temporary_file = open(img_path, 'wb')
+        temporary_file.write(b'\x89PNG\r\n\x1a\n')
+        for chunk_type, chunk_data, chunk_crc, chunk_length in self.chunk_list:
+            if chunk_type in [b'IDAT']:
+                new_data = zlib.compress(data, 9)
+                new_crc = zlib.crc32(new_data, zlib.crc32(struct.pack('>4s', b'IDAT')))
+                chunk_len = len(new_data)
+                temporary_file.write(struct.pack('>I', chunk_len))
+                temporary_file.write(chunk_type)
+                temporary_file.write(new_data)
+                temporary_file.write(struct.pack('>I', new_crc))
+            else:
+                temporary_file.write(struct.pack('>I', chunk_length))
+                temporary_file.write(chunk_type)
+                temporary_file.write(chunk_data)
+                temporary_file.write(struct.pack('>I', chunk_crc))
+        temporary_file.close()
 
-        writer = png.Writer(width, height , greyscale=False, alpha=True)
-        f = open(name, 'wb')
-        writer.write(f, pixels_grouped_by_rows)
-        f.close()
+    def ecb_encrypt(self,e,n,key_size,d):
+
+        idat_data = b''.join(chunk_data for chunk_type, chunk_data, chunk_crc,chunk_length in self.chunk_list if chunk_type == b'IDAT')
+        idat_data = zlib.decompress(idat_data)
+
+        data,after= Encryption.ecb_encrypt(idat_data, e, n, key_size)
+        self.save_file("after_ecb_encryption.png",data)
+        data = Encryption.ecb_decrypt(data, d,n,key_size,after)
+        self.save_file("decrypted_ecb.png", data)
 
 
 
-    def ecb_encrypt(self,e,n,key_size):
-        for chunk_type, chunk_data, chunk_crc in self.chunk_list:
-            if chunk_type == b'IHDR':
-                check = Chunks.IHDR(chunk_type,chunk_data,chunk_crc)
-        idat_data = b''.join(chunk_data for chunk_type, chunk_data, chunk_crc in self.chunk_list if chunk_type == b'IDAT')
-        data3 = Chunks.IDAT(chunk_type, idat_data, chunk_crc, check.width, check.height, check.color_type)
-        data3.reconstructed_pixel_data()
-        data = Encryption.ecb_encrypt(data3.data, e, n,key_size)
-        print(data)
-        self.save_image_with_png_writer(data,"dwe.png")
+    def cbc_encrypt(self,e,n,key_size,d):
+        idat_data = b''.join(chunk_data for chunk_type, chunk_data, chunk_crc, chunk_length in self.chunk_list if chunk_type == b'IDAT')
+        idat_data = zlib.decompress(idat_data)
+
+        data,vector,after= Encryption.cbc_encrypt(idat_data,e,n,key_size)
+
+        self.save_file("after_cbc_encryption.png",data)
+        data = Encryption.cbc_decrypt(data,d,n,key_size,vector,after )
+        self.save_file("decrypted_cbc.png",data)
+
+    def library_encrypt(self,e,n,key_size):
+        idat_data = b''.join(chunk_data for chunk_type, chunk_data, chunk_crc, chunk_length in self.chunk_list if chunk_type == b'IDAT')
+        idat_data = zlib.decompress(idat_data)
+
+        data, after_data = Encryption.library_encrypt(idat_data,e,n,key_size)
+        self.save_file("after_library_encryption.png",data)
 
 
 

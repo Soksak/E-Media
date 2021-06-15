@@ -1,12 +1,11 @@
-import random
 import Crypto.Util.number as crypto
 
 
 
 def generate_key(keysize: int):
-
-    p = crypto.getPrime(keysize)
-    q = crypto.getPrime(keysize)
+    prime_size = keysize//2
+    p = crypto.getPrime(prime_size)
+    q = crypto.getPrime(prime_size)
     if p == q:
         raise ValueError("p and q can't be equal")
     n = p * q

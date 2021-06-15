@@ -11,13 +11,14 @@ def read_chunk(f):
     chunk_actual_crc = zlib.crc32(chunk_data, zlib.crc32(struct.pack('>4s', chunk_type)))
     if chunk_expected_crc != chunk_actual_crc:
         raise Exception('chunk checksum failed')
-    return chunk_type, chunk_data, chunk_actual_crc
+    return chunk_type, chunk_data, chunk_actual_crc,chunk_length
 
 class Chunk:
-    def __init__(self, type_, data, crc):
+    def __init__(self, type_, data, crc,length):
         self.type_ = type_
         self.data = data
         self.crc = crc
+        self.length = length
 
 class IHDR(Chunk):
     """The IHDR chunk must appear FIRST.It contains:
@@ -29,8 +30,8 @@ class IHDR(Chunk):
     Filter method: 1 byte
     Interlace method: 1 byte"""
 
-    def __init__(self , type_, data, crc):
-        super().__init__( type_, data, crc)
+    def __init__(self , type_, data, crc,length):
+        super().__init__( type_, data, crc,length)
         values = struct.unpack('>iibbbbb', self.data)
         self.width = values[0]
         self.height = values[1]
@@ -73,8 +74,8 @@ class IHDR(Chunk):
 
 class PLTE(Chunk):
 
-    def __init__(self,type_,data,crc):
-        super().__init__( type_, data, crc)
+    def __init__(self,type_,data,crc,length):
+        super().__init__( type_, data, crc,length)
 
     def check_chunk(self,color_type):
         if (color_type == 0 or color_type == 4):
@@ -100,8 +101,8 @@ class PLTE(Chunk):
 
 class IDAT(Chunk):
 
-    def __init__(self,  type_, data, crc, width, height, color_type):
-        super().__init__( type_, data, crc)
+    def __init__(self,  type_, data, crc, width, height, color_type,length):
+        super().__init__( type_, data, crc,length)
         self.data = zlib.decompress(data)
         self.Recon = []
         self.width = width
@@ -170,15 +171,15 @@ class IDAT(Chunk):
 
 
 class IEND(Chunk):
-    def __init__(self,  type_, data, crc):
-        super().__init__( type_, data, crc)
+    def __init__(self,  type_, data, crc,length):
+        super().__init__( type_, data, crc,length)
 
     def print_chunk(self):
         print("IEND chunk just marks the image end. The chunk's data field is empty.\n")
 
 class tIME(Chunk):
-    def __init__(self,  type_, data, crc):
-        super().__init__( type_, data, crc)
+    def __init__(self,  type_, data, crc,length):
+        super().__init__( type_, data, crc,length)
 
         values = struct.unpack('>hbbbbb', self.data)
         self.year = values[0]
@@ -194,8 +195,8 @@ class tIME(Chunk):
         print("Time: " + str(self.hour) + ":" + str(self.minute) + ":" + str(self.second)+"\n")
 
 class gAMA(Chunk):
-    def __init__(self,  type_, data, crc):
-        super().__init__( type_, data, crc)
+    def __init__(self,  type_, data, crc,length):
+        super().__init__( type_, data, crc,length)
         # PNG specification says, that stored gamma value is multiplied by 100000
         self.gamma = int.from_bytes(data, 'big') / 100000
 
@@ -203,8 +204,8 @@ class gAMA(Chunk):
         print("gAMA chunk: \n\nGamma: " + str(self.gamma)+"\n")
 
 class cHRM(Chunk):
-    def __init__(self, type_, data, crc):
-        super().__init__(type_, data, crc)
+    def __init__(self, type_, data, crc,l):
+        super().__init__(type_, data, crc,l)
 
         values = struct.unpack('>iiiiiiii', self.data)
         # PNG specification says, that stored values are multiplied by 100000
